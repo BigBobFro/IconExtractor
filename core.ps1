@@ -12,7 +12,7 @@
     .Notes
     Author      :   Fro
     Date        :   15 May 2025
-    Email       :   asdf
+    Git         :   https://github.com/BigBobFro
     Version     :   1.0 (Final)
 
     ========================================================================================================
@@ -21,7 +21,8 @@
 
     ========================================================================================================
     .ToDo
-
+    Add ability to use custom files to extract icons from, store them in Registry for regular use
+        and manage (remove) when needed.
 #>
 
 # ====================================================
@@ -66,7 +67,7 @@ Add-Type -TypeDefinition $code -ReferencedAssemblies System.Drawing
 $Global:i                   = 0     # Icon Startpoint
 $srcPath                    = split-path -path $MyInvocation.MyCommand.path
 $regRoot                    = "HKCU:\SOFTWARE\FAB\IconExtractor"
-$Debug                      = $true
+$Debug                      = $false
 
 # Visual Element Constants
 $LargeButtonSize            = [System.Drawing.Size]::new(50,50)
@@ -226,17 +227,4 @@ $MainWindow.Controls.Add($FileSelectDD)
 
 $MainWindow.Controls.add($exitButton)
 [void] $MainWindow.ShowDialog()
-
-
-
-
-
-
-
-
-
-
-
-
-
 
