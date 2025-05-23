@@ -39,7 +39,7 @@ $DefaultFileList.add("SSMS","C:\Program Files\Microsoft SQL Server Management St
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 
 # ====================================================
-# Icon Extraction Code Base
+# Icon Extraction Code Base; This is the major workhorse of the script
 $code = @"
 using System;
 using System.Drawing;
@@ -67,7 +67,7 @@ Add-Type -TypeDefinition $code -ReferencedAssemblies System.Drawing
 $Global:i                   = 0     # Icon Startpoint
 $srcPath                    = split-path -path $MyInvocation.MyCommand.path
 $regRoot                    = "HKCU:\SOFTWARE\FAB\IconExtractor"
-$Debug                      = $false
+$Debug                      = $true
 
 # Visual Element Constants
 $LargeButtonSize            = [System.Drawing.Size]::new(50,50)
@@ -80,6 +80,54 @@ function UpdateIcon {           # Just got tired of typing this out all the time
     $testButton.Image   = [system.IconExtractor]::Extract($Global:iconSource, $global:i, $true)
 }
 
+Function UpdateFileDD{
+    # Start with default file list
+    $FileSourceList             = $DefaultFileList
+    
+    # Get custom source files from registry
+    
+    [string]$rawFileList = get-itempropertyvalue $regRoot -name FileList
+    if($rawFileList.length -ne 0){
+        # Something found in registry; need to parse
+        $workingString = $rawFileList
+        
+        # Parse Registry Entry
+        do{
+            $nextIndex = $null
+            $nextEntry = $null
+            $nextIndex = $workingString.IndexOf(';')
+            if($nextIndex -lt 0){
+                #no more ';' in the working string
+                $nextEntry = $workingString
+                $workingString = $null
+            }
+            else{
+                $nextEntry = $workingString.Substring(0,$nextIndex)
+                $workingString = $workingString.Substring($nextIndex+1, $workingString.Length - $($nextIndex+1))
+            }
+            if($debug){write-host "Next Entry: $nextEntry"}
+            # Add Entry to return list
+            $nextIndex = $nextEntry.IndexOf(',')
+            $name = $($nextEntry.substring(0,$nextIndex)).trim("""")
+            $value = $($nextEntry.substring($nextIndex+1, $nextEntry.length - $($nextIndex+1))).trim("""")
+            
+            if(!$($FileSourceList[$name])){
+                $FileSourceList.add($name,$value)
+            }
+            else{<# Duplicate entry #>}
+        }
+        until($workingString.length -le 1)
+    }
+    else { 
+        # Nothing in regkey; Nothing to do
+    }
+    
+    foreach($f in $FileSourceList.Keys){
+        if($debug){write-host "File to add: $f"}
+        [void]$FileSelectDD.Items.Add($($f))
+    }
+
+}
 
 # ======================================================
 # Window Control Objects
@@ -166,16 +214,13 @@ $ExtractButton.add_click({
     }
 })
 
-# File Source objects
+# File Source objects Drop Down
 
-$FileSourceList             = $DefaultFileList # Add custom file locations from Registry
 $FileSelectDD               = New-Object System.Windows.Forms.ComboBox
 $FileSelectDD.Location      = [System.Drawing.Size]::New(150,25)
 $FileSelectDD.Size          = [System.Drawing.Size]::new(150,25)
-foreach($f in $filesourcelist.Keys){
-    write-host "File to add: $f"
-    [void]$FileSelectDD.Items.Add($($f))
-}
+UpdateFileDD # Updates dropdown to current list of files
+
 # Pull last file used for extraction from Registry
 $filename = Get-ItemPropertyValue -path $regRoot -name "IconSource"
 # Check if file is in file list
@@ -188,15 +233,45 @@ $FileSelectDD.add_selectedIndexChanged({
     UpdateIcon
 })
 
+$fileOpsLabel                       = New-Object System.Windows.Forms.Label
+$fileOpsLabel.Location              = [System.Drawing.Size]::new(150,50)
+$fileOpsLabel.Size                  = [System.Drawing.Size]::new(150,25)
+$fileOpsLabel.Font                  = $DefaultFont
+$fileOpsLabel.Text                  = "File Ops:"
+
+$addCustomFileButton                = new-object System.Windows.Forms.Button
+$addCustomFileButton.Location       = [System.Drawing.Size]::new(150,75)
+$addCustomFileButton.Size           = $SmallButtonSize
+$addCustomFileButton.Text           = "Add"
+$addCustomFileButton.Font           = $DefaultFont
+$addCustomFileButton.add_click({
+    # Grab existing list
+    # Add to list string
+    # write list string back to registry
+    UpdateFileDD #Update DD list
+})
+
+$remCustomFileButton                = new-object System.Windows.Forms.Button
+$remCustomFileButton.Location       = [System.Drawing.Size]::new(200,75)
+$remCustomFileButton.Size           = $SmallButtonSize
+$remCustomFileButton.Text           = "Rem"
+$remCustomFileButton.Font           = $DefaultFont
+$remCustomFileButton.add_click({
+    # Grab existing list
+    # Parse to remove; Give error message if file is a default file (not in registry list)
+    # Rewrite string to registry
+    UpdateFileDD # Update DD list
+})
+
 # ===========================================
 # Principal Window Object(s)
 
 $exitButton                 = New-Object System.Windows.Forms.Button
 $exitButton.Location        = [System.Drawing.Size]::new($($MainWindow.width - 100),$($MainWindow.Height - 100))
-$exitbutton.Size            = [System.Drawing.Size]::new(75,50)
+$exitButton.Size            = [System.Drawing.Size]::new(75,50)
 $exitButton.Text            = "Exit"
 $exitButton.Font            = $TitleFont
-$exitbutton.add_click({
+$exitButton.add_click({
     # set current setting to registry for later retrieval
     if($debug){write-host "Exit button pressed"}
     if(!$(test-path $regRoot)){
@@ -224,6 +299,9 @@ $MainWindow.Controls.add($MinusButton)
 $MainWindow.Controls.add($Jump2Box)
 $MainWindow.Controls.add($Jump2Button)
 $MainWindow.Controls.Add($FileSelectDD)
+$MainWindow.Controls.Add($fileOpsLabel)
+$MainWindow.Controls.Add($addCustomFileButton)
+$MainWindow.Controls.Add($RemCustomFileButton)
 
 $MainWindow.Controls.add($exitButton)
 [void] $MainWindow.ShowDialog()
